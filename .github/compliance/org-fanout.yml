@@ -1,0 +1,32 @@
+name: Org Fan-out Compliance
+on:
+  schedule: [{ cron: '3 3 * * *' }]
+  workflow_dispatch:
+    inputs:
+      history_depth:
+        description: "Commits to scan for secrets in each repo"
+        default: "0"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  fanout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GitHub CLI
+        uses: cli/cli@v2
+      - name: Auth
+        run: echo "${{ secrets.ORG_ADMIN_TOKEN }}" | gh auth login --with-token
+      - name: Dispatch to all public repos
+        env:
+          ORG: your-org
+          DEPTH: ${{ github.event.inputs.history_depth || '0' }}
+        run: |
+          gh repo list "$ORG" --visibility public --json nameWithOwner -q '.[].nameWithOwner' | while read REPO; do
+            echo "Dispatching compliance to $REPO"
+            gh workflow run compliance.yml -R "$REPO" -f history_depth="$DEPTH" || true
+          done
+

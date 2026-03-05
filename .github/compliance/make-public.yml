@@ -1,0 +1,39 @@
+name: Make Repository Public (Gated)
+on:
+  workflow_dispatch:
+    inputs:
+      history_depth:
+        description: "Commits to scan for secrets before public switch"
+        default: "999999"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  prechecks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run compliance with deep history
+        uses: worldbank/open-source-kit/.github/workflows/repo-compliance.yml@main
+        with:
+          history_depth: ${{ github.event.inputs.history_depth }}
+        secrets: inherit
+
+  publish:
+    needs: prechecks
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Flip to public via API
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.ORG_ADMIN_TOKEN }}
+          script: |
+            await github.rest.repos.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              private: false
+            });
+            core.notice("Repository visibility set to PUBLIC")
+
